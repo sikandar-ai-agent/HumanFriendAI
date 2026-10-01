@@ -1,3 +1,4 @@
+
 name: Build Human Friend AI APK
 
 on:
@@ -38,27 +39,53 @@ jobs:
       - name: Extract Human Friend AI project
         run: |
           rm -rf build-project
-          mkdir build-project
-          unzip -q HumanFriendAI-OnlineBuild-v0.7-Corrected.zip -d build-project
+          mkdir -p build-project
+
+          ZIP_FILE="HumanFriendAI-v0.7-MainActivity-Updated.zip"
+
+          if [ ! -f "$ZIP_FILE" ]; then
+            echo "ERROR: ZIP file not found!"
+            echo "Available files:"
+            ls -lah
+            exit 1
+          fi
+
+          echo "Extracting $ZIP_FILE"
+          unzip -q "$ZIP_FILE" -d build-project
+
+      - name: Locate Android project
+        run: |
+          echo "Searching for Gradle project..."
+
+          find build-project -name settings.gradle.kts -o -name settings.gradle
+
+          if [ -f build-project/settings.gradle.kts ] || [ -f build-project/settings.gradle ]; then
+            echo "PROJECT_DIR=build-project" >> "$GITHUB_ENV"
+          else
+            PROJECT_DIR=$(find build-project -name settings.gradle.kts -o -name settings.gradle | head -n 1 | xargs dirname)
+
+            if [ -z "$PROJECT_DIR" ]; then
+              echo "ERROR: Gradle project not found!"
+              exit 1
+            fi
+
+            echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          fi
 
       - name: Verify project files
-        working-directory: build-project
         run: |
-          echo "Project files:"
-          ls -la
-          echo "App files:"
-          ls -la app
-          echo "Gradle configuration:"
-          cat build.gradle.kts
+          echo "Project directory: $PROJECT_DIR"
+          ls -la "$PROJECT_DIR"
+          ls -la "$PROJECT_DIR/app"
           echo "App Gradle configuration:"
-          cat app/build.gradle.kts
+          cat "$PROJECT_DIR/app/build.gradle.kts"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
 
       - name: Build Debug APK
-        working-directory: build-project
         run: |
+          cd "$PROJECT_DIR"
           gradle :app:assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
@@ -66,5 +93,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: HumanFriendAI-debug-apk
-          path: build-project/app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
