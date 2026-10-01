@@ -18,26 +18,29 @@ jobs:
           java-version: '17'
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
 
-      - name: Install Android SDK
+      - name: Install Android SDK 35
         run: |
-          yes | sdkmanager --licenses || true
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          yes | sdkmanager --licenses
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
       - name: Extract Human Friend AI project
         run: |
+          rm -rf build-project
           mkdir build-project
           unzip -q HumanFriendAI-OnlineBuild.zip -d build-project
 
-      - name: Setup Gradle 8.10
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10'
 
       - name: Build APK
         working-directory: build-project
-        run: gradle :app:assembleDebug
+        run: gradle :app:assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
