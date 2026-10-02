@@ -1,10 +1,10 @@
+
 name: Build HumanFriendAI APK
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - 'app/**'
       - '*.gradle.kts'
@@ -17,42 +17,35 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    env:
-      ANDROID_HOME: /usr/local/lib/android/sdk
-      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Accept Android SDK licenses
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android packages
+        shell: bash
         run: |
-          yes | sdkmanager --licenses || true
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT}}"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | head -n 1)"
 
-      - name: Install Android SDK packages
-        run: |
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
+          if [ -z "$SDKMANAGER" ]; then
+            echo "ERROR: sdkmanager not found"
+            exit 1
+          fi
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.10.2'
+          echo "Using SDK manager: $SDKMANAGER"
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Check Gradle
-        run: gradle --version
-
-      - name: Build HumanFriendAI APK
+      - name: Build APK
         run: gradle --no-daemon assembleDebug
 
       - name: Upload APK
@@ -61,4 +54,3 @@ jobs:
           name: HumanFriendAI-v0.9-APK
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-          retention-days: 14
