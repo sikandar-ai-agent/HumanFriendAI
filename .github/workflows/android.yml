@@ -1,7 +1,6 @@
-
 name: Build HumanFriendAI APK
 
-on:
+'on':
 workflow_dispatch:
 push:
 branches:
@@ -10,102 +9,65 @@ branches:
 permissions:
 contents: read
 
-concurrency:
-group: humanfriendai-android-${{ github.ref }}
-cancel-in-progress: true
-
 jobs:
 build:
 name: Build Android APK
 runs-on: ubuntu-latest
 timeout-minutes: 40
 
-env:
-  ANDROID_HOME: /usr/local/lib/android/sdk
-  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-  GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx3g
-
 steps:
   - name: Checkout repository
     uses: actions/checkout@v4
 
-  - name: Setup Java 17
+  - name: Setup Java
     uses: actions/setup-java@v5
     with:
       distribution: temurin
       java-version: '17'
 
-  - name: Locate Android SDK
-    shell: bash
-    run: |
-      echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
-      echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
-
-      if [ ! -d "$ANDROID_HOME" ]; then
-        echo "ERROR: Android SDK directory not found"
-        exit 1
-      fi
-
-      SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
-
-      if [ -z "$SDKMANAGER" ]; then
-        echo "ERROR: sdkmanager not found"
-        exit 1
-      fi
-
-      echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
-      echo "SDK manager located successfully."
+  - name: Setup Android SDK
+    uses: android-actions/setup-android@v3
 
   - name: Accept Android SDK licenses
     shell: bash
     run: |
+      SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+      SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
+      if [ -z "$SDKMANAGER" ]; then
+        echo "ERROR: sdkmanager not found"
+        exit 1
+      fi
       yes | "$SDKMANAGER" --licenses || true
 
-  - name: Install Android SDK components
+  - name: Install Android SDK packages
     shell: bash
     run: |
-      "$SDKMANAGER" --install \
-        "platform-tools" \
-        "platforms;android-35" \
-        "build-tools;35.0.0"
+      SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+      SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
+      "$SDKMANAGER" --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
-  - name: Verify Android project
-    shell: bash
+  - name: Verify project
     run: |
-      if [ ! -f settings.gradle ] && [ ! -f settings.gradle.kts ]; then
-        echo "ERROR: Gradle settings file missing"
-        exit 1
-      fi
-
-      if [ ! -f app/build.gradle ] && [ ! -f app/build.gradle.kts ]; then
-        echo "ERROR: App Gradle build file missing"
-        exit 1
-      fi
-
-      echo "Android project structure verified."
+      test -f settings.gradle || test -f settings.gradle.kts
+      test -f app/build.gradle || test -f app/build.gradle.kts
+      echo "Project files verified"
 
   - name: Setup Gradle
     uses: gradle/actions/setup-gradle@v4
 
-  - name: Build Debug APK
-    shell: bash
-    run: |
-      gradle --no-daemon --stacktrace assembleDebug
+  - name: Build APK
+    run: gradle --no-daemon --stacktrace assembleDebug
 
   - name: Verify APK
-    shell: bash
     run: |
       APK="$(find app/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)"
-
       if [ -z "$APK" ]; then
-        echo "ERROR: Debug APK was not generated"
+        echo "ERROR: APK not generated"
         exit 1
       fi
-
-      echo "APK successfully generated:"
       ls -lh "$APK"
 
-  - name: Upload APK Artifact
+  - name: Upload APK
     uses: actions/upload-artifact@v4
     with:
       name: HumanFriendAI-v0.9-debug
