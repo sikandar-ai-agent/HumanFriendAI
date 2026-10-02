@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "767280973014",
+    "project_id": "humanfriendai",
+    "storage_bucket": "humanfriendai.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:767280973014:android:ac13bcbb3c74248776f577",
+        "android_client_info": {
+          "package_name": "com.humanfriend.ai"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "767280973014-aman28u417r3f6agljms23sl7ov4a3sj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCcTRwUlO4REy25iOD762aNVg7gbN0SK8g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "767280973014-aman28u417r3f6agljms23sl7ov4a3sj.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

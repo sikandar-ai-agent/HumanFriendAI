@@ -1,0 +1,217 @@
+package com.humanfriend.ai
+
+import android.os.Bundle
+import android.content.Context
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.io.IOException
+import java.util.concurrent.TimeUnit
+
+class MainActivity : ComponentActivity() {
+
+    private val defaultServerUrl = "http://10.185.58.206:5000/chat"
+    private var activeServerUrl = defaultServerUrl
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .build()
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val prefs = getSharedPreferences("humanfriend_settings", Context.MODE_PRIVATE)
+        val savedUrl = prefs.getString("server_url", defaultServerUrl) ?: defaultServerUrl
+        val savedApiKey = prefs.getString("optional_api_key", "") ?: ""
+        activeServerUrl = savedUrl
+        setContent {
+            MaterialTheme {
+                HumanFriendScreen(
+                    initialServerUrl = savedUrl,
+                    initialApiKey = savedApiKey,
+                    onSaveSettings = { url, apiKey ->
+                        activeServerUrl = url
+                        prefs.edit()
+                            .putString("server_url", url)
+                            .putString("optional_api_key", apiKey)
+                            .apply()
+                    },
+                    onSend = { message, update, apiKey ->
+                        sendToServer(message, update, apiKey)
+                    }
+                )
+            }
+        }
+    }
+
+    private fun sendToServer(message: String, update: (String) -> Unit, apiKey: String) {
+        update("میسج بھیجا جا رہا ہے...")
+
+        val payload = JSONObject().put("message", message)
+        if (apiKey.isNotBlank()) payload.put("api_key", apiKey)
+        val body = payload.toString()
+            .toRequestBody("application/json; charset=utf-8".toMediaType())
+
+        val request = Request.Builder()
+            .url(activeServerUrl)
+            .post(body)
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                runOnUiThread {
+                    update("رابطہ کرنے میں خرابی: ${e.localizedMessage ?: "نامعلوم خرابی"}")
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                response.use {
+                    val text = it.body?.string().orEmpty()
+                    val reply = if (it.isSuccessful) {
+                        try {
+                            JSONObject(text).optString("response", "کوئی جواب نہیں ملا")
+                        } catch (_: Exception) {
+                            "سرور کا جواب پڑھا نہیں جا سکا۔"
+                        }
+                    } else {
+                        "سرور کی طرف سے خرابی کا کوڈ: ${it.code}"
+                    }
+                    runOnUiThread { update(reply) }
+                }
+            }
+        })
+    }
+}
+
+@Composable
+private fun HumanFriendScreen(
+    initialServerUrl: String,
+    initialApiKey: String,
+    onSaveSettings: (String, String) -> Unit,
+    onSend: (String, (String) -> Unit, String) -> Unit
+) {
+    var message by remember { mutableStateOf("") }
+    var reply by remember { mutableStateOf("السلام علیکم! میں HumanFriendAI ہوں۔ آپ کیا پوچھنا چاہتے ہیں؟") }
+    var busy by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
+    var serverEdit by remember { mutableStateOf(initialServerUrl) }
+    var apiKeyEdit by remember { mutableStateOf(initialApiKey) }
+    var language by remember { mutableStateOf("اردو") }
+
+    val titleText = when (language) {
+        "English" -> "Your AI friend"
+        "Hinglish" -> "Aapka AI dost"
+        "Roman Urdu" -> "Aapka AI dost"
+        else -> "آپ کا AI دوست"
+    }
+    val inputLabel = when (language) {
+        "English" -> "Type your message"
+        "Hinglish" -> "Apna message likhein"
+        "Roman Urdu" -> "Apna paigham likhein"
+        else -> "اپنا پیغام لکھیں"
+    }
+    val sendLabel = when (language) {
+        "English" -> "Send message"
+        "Hinglish", "Roman Urdu" -> "Message bhejein"
+        else -> "پیغام بھیجیں"
+    }
+
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .imePadding()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Human Friend AI", style = MaterialTheme.typography.headlineMedium)
+                TextButton(onClick = { showSettings = !showSettings }) {
+                    Text(if (showSettings) "Chat" else "⚙ Settings")
+                }
+            }
+            if (showSettings) {
+                Text("Language / زبان")
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("اردو", "English", "Hinglish", "Roman Urdu").forEach { item ->
+                        FilterChip(
+                            selected = language == item,
+                            onClick = { language = item },
+                            label = { Text(item) }
+                        )
+                    }
+                }
+                Text("Developer Settings")
+                OutlinedTextField(
+                    value = serverEdit,
+                    onValueChange = { serverEdit = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Server URL (with /chat)") },
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = apiKeyEdit,
+                    onValueChange = { apiKeyEdit = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Optional API Key (future use)") },
+                    singleLine = true
+                )
+                Button(
+                    onClick = {
+                        onSaveSettings(serverEdit.trim(), apiKeyEdit.trim())
+                        reply = "Settings saved. / سیٹنگز محفوظ ہوگئیں۔"
+                    },
+                    enabled = serverEdit.startsWith("http://") || serverEdit.startsWith("https://")
+                ) { Text("Save Settings") }
+                Text("Optional: blank is fine for your current Hugging Face agent. If entered, the app sends it to your server as api_key. Use only with a trusted backend; device-stored keys are not fully secret.")
+            } else {
+                Text(titleText, style = MaterialTheme.typography.titleMedium)
+            }
+            Surface(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                shape = MaterialTheme.shapes.large,
+                tonalElevation = 2.dp
+            ) {
+                Text(
+                    text = reply,
+                    modifier = Modifier.padding(16.dp).verticalScroll(rememberScrollState()),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+            OutlinedTextField(
+                value = message,
+                onValueChange = { message = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(inputLabel) },
+                enabled = !busy,
+                minLines = 2
+            )
+            Button(
+                onClick = {
+                    val text = message.trim()
+                    if (text.isNotEmpty() && !busy) {
+                        busy = true
+                        onSend(text, { result ->
+                            reply = result
+                            busy = false
+                        }, apiKeyEdit.trim())
+                        message = ""
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = message.isNotBlank() && !busy
+            ) {
+                Text(if (busy) "..." else sendLabel)
+            }
+        }
+    }
+}
