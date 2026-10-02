@@ -1,76 +1,84 @@
 name: Build HumanFriendAI APK
 
 'on':
-workflow_dispatch:
-push:
-branches:
-- main
+  workflow_dispatch:
+  push:
+    branches:
+      - main
 
 permissions:
-contents: read
+  contents: read
 
 jobs:
-build:
-name: Build Android APK
-runs-on: ubuntu-latest
-timeout-minutes: 40
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
 
-steps:
-  - name: Checkout repository
-    uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-  - name: Setup Java
-    uses: actions/setup-java@v5
-    with:
-      distribution: temurin
-      java-version: '17'
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
 
-  - name: Setup Android SDK
-    uses: android-actions/setup-android@v3
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-  - name: Accept Android SDK licenses
-    shell: bash
-    run: |
-      SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-      SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
-      if [ -z "$SDKMANAGER" ]; then
-        echo "ERROR: sdkmanager not found"
-        exit 1
-      fi
-      yes | "$SDKMANAGER" --licenses || true
+      - name: Accept Android SDK licenses
+        shell: bash
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
 
-  - name: Install Android SDK packages
-    shell: bash
-    run: |
-      SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-      SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
-      "$SDKMANAGER" --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          if [ -z "$SDKMANAGER" ]; then
+            echo "ERROR: sdkmanager not found"
+            exit 1
+          fi
 
-  - name: Verify project
-    run: |
-      test -f settings.gradle || test -f settings.gradle.kts
-      test -f app/build.gradle || test -f app/build.gradle.kts
-      echo "Project files verified"
+          yes | "$SDKMANAGER" --licenses || true
 
-  - name: Setup Gradle
-    uses: gradle/actions/setup-gradle@v4
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
 
-  - name: Build APK
-    run: gradle --no-daemon --stacktrace assembleDebug
+          "$SDKMANAGER" --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
-  - name: Verify APK
-    run: |
-      APK="$(find app/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)"
-      if [ -z "$APK" ]; then
-        echo "ERROR: APK not generated"
-        exit 1
-      fi
-      ls -lh "$APK"
+      - name: Verify project
+        run: |
+          test -f settings.gradle || test -f settings.gradle.kts
+          test -f app/build.gradle || test -f app/build.gradle.kts
+          echo "Project files verified"
 
-  - name: Upload APK
-    uses: actions/upload-artifact@v4
-    with:
-      name: HumanFriendAI-v0.9-debug
-      path: app/build/outputs/apk/debug/*.apk
-      if-no-files-found: error
-      retention-days: 14
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        run: gradle --no-daemon --stacktrace assembleDebug
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          APK="$(find app/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)"
+
+          if [ -z "$APK" ]; then
+            echo "ERROR: APK not generated"
+            exit 1
+          fi
+
+          ls -lh "$APK"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: HumanFriendAI-v0.9-debug
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
